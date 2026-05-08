@@ -1,0 +1,139 @@
+//@version=5
+indicator("Price Density Extreme Radar", "Density Radar", overlay=true, max_boxes_count=20, max_labels_count=100)
+
+// -----------------------------
+// Inputs
+// -----------------------------
+lookback = input.int(120, "统计周期 K 线数", minval=20, maxval=500)
+bins = input.int(48, "价格区间数量", minval=12, maxval=120)
+stdevMult = input.float(2.0, "密集区标准差倍数", minval=0.5, maxval=4.0, step=0.25)
+volLen = input.int(30, "成交量均线周期", minval=5, maxval=120)
+atrLen = input.int(14, "ATR 周期", minval=5, maxval=120)
+confirmBars = input.int(3, "需求/破位确认等待 K 线数", minval=1, maxval=10)
+volSpike = input.float(1.8, "放量阈值：当前量 / 均量", minval=1.0, maxval=5.0, step=0.1)
+wickMin = input.float(0.35, "终极震仓下影线占比", minval=0.05, maxval=0.8, step=0.05)
+wideSpread = input.float(1.4, "冰层断裂宽幅阈值：振幅 / ATR", minval=0.5, maxval=5.0, step=0.1)
+showZoneBox = input.bool(true, "显示价格密集区")
+showDashboard = input.bool(true, "显示量价判定面板")
+
+// -----------------------------
+// Price-density profile
+// A bin is counted once when one candle's high/low range crosses or touches it.
+// The bin with the maximum crossed-candle count is the price dense area.
+// -----------------------------
+highestInWindow = ta.highest(high, lookback)
+lowestInWindow = ta.lowest(low, lookback)
+windowRange = highestInWindow - lowestInWindow
+binSize = windowRange / bins
+
+var counts = array.new_int()
+var int maxCrossCount = na
+var int denseBinIndex = na
+float denseLow = na
+float denseHigh = na
+float denseMid = na
+
+if bar_index >= lookback and windowRange > syminfo.mintick
+    array.clear(counts)
+    for bin = 0 to bins - 1
+        int crossed = 0
+        float binLow = lowestInWindow + binSize * bin
+        float binHigh = binLow + binSize
+        for offset = 0 to lookback - 1
+            bool candleCrossesBin = high[offset] >= binLow and low[offset] <= binHigh
+            crossed += candleCrossesBin ? 1 : 0
+        array.push(counts, crossed)
+
+    maxCrossCount := 0
+    denseBinIndex := 0
+    for bin = 0 to bins - 1
+        int value = array.get(counts, bin)
+        if value > maxCrossCount
+            maxCrossCount := value
+            denseBinIndex := bin
+
+    denseLow := lowestInWindow + binSize * denseBinIndex
+    denseHigh := denseLow + binSize
+    denseMid := (denseLow + denseHigh) / 2.0
+
+stdev = ta.stdev(close, lookback)
+upperExtreme = denseMid + stdevMult * stdev
+lowerExtreme = denseMid - stdevMult * stdev
+
+plot(denseMid, "密集区中轴", color=color.new(color.yellow, 0), linewidth=2)
+plot(upperExtreme, "+2σ 警戒线", color=color.new(color.red, 0), linewidth=2)
+plot(lowerExtreme, "-2σ 警戒线", color=color.new(color.lime, 0), linewidth=2)
+
+var box denseBox = na
+if showZoneBox and barstate.islast and not na(denseLow)
+    box.delete(denseBox)
+    denseBox := box.new(bar_index - lookback, denseHigh, bar_index, denseLow, border_color=color.new(color.yellow, 0), bgcolor=color.new(color.yellow, 88))
+
+// -----------------------------
+// Wyckoff-style volume/price objective filters
+// -----------------------------
+volAvg = ta.sma(volume, volLen)
+relVol = volAvg > 0 ? volume / volAvg : na
+atr = ta.atr(atrLen)
+barRange = math.max(high - low, syminfo.mintick)
+spreadAtr = atr > 0 ? barRange / atr : na
+closePosition = (close - low) / barRange
+lowerWickRatio = (math.min(open, close) - low) / barRange
+upperWickRatio = (high - math.max(open, close)) / barRange
+bodyRatio = math.abs(close - open) / barRange
+
+hitLowerExtreme = not na(lowerExtreme) and low <= lowerExtreme
+reclaimLowerExtreme = not na(lowerExtreme) and close > lowerExtreme
+lostLowerExtreme = not na(lowerExtreme) and close < lowerExtreme
+
+// 终极震仓：砸穿警戒线，但收回、下影长、放量，代表供应被吸收。
+shakeoutProbe = hitLowerExtreme and reclaimLowerExtreme and relVol >= volSpike and lowerWickRatio >= wickMin and closePosition >= 0.55
+barsSinceShakeoutProbe = ta.barssince(shakeoutProbe)
+demandConfirmation = close > high[1] and close > open and closePosition >= 0.6 and relVol >= 1.1
+terminalShakeout = not na(barsSinceShakeoutProbe) and barsSinceShakeoutProbe <= confirmBars and demandConfirmation
+
+// 冰层断裂：砸穿警戒线后收在低位，宽幅、放量、缺少下影，随后继续向下跟随。
+breakdownProbe = hitLowerExtreme and lostLowerExtreme and relVol >= volSpike and spreadAtr >= wideSpread and closePosition <= 0.25 and lowerWickRatio < wickMin
+barsSinceBreakdownProbe = ta.barssince(breakdownProbe)
+breakdownFollowThrough = close < low[1] and lostLowerExtreme and relVol >= 1.0
+consensusBreakdown = breakdownProbe or (not na(barsSinceBreakdownProbe) and barsSinceBreakdownProbe <= confirmBars and breakdownFollowThrough)
+
+// Ambiguous warning: price is at the radar line, but neither side has confirmed.
+radarOnly = hitLowerExtreme and not terminalShakeout and not consensusBreakdown
+
+plotshape(shakeoutProbe, title="震仓探针", text="探针", style=shape.circle, location=location.belowbar, color=color.new(color.lime, 0), textcolor=color.black, size=size.tiny)
+plotshape(terminalShakeout, title="终极震仓确认", text="震仓\n确认", style=shape.labelup, location=location.belowbar, color=color.new(color.lime, 0), textcolor=color.black, size=size.small)
+plotshape(consensusBreakdown, title="冰层断裂", text="断裂", style=shape.labeldown, location=location.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+plotshape(radarOnly, title="仅触发雷达", text="雷达", style=shape.triangleup, location=location.belowbar, color=color.new(color.orange, 0), textcolor=color.black, size=size.tiny)
+
+alertcondition(shakeoutProbe, "密集区 -2σ 震仓探针", "价格触及密集区 -2σ，且出现放量长下影收回。等待需求确认。")
+alertcondition(terminalShakeout, "终极震仓确认", "触发需求确认：更像终极震仓，可进入抄底观察清单。")
+alertcondition(consensusBreakdown, "共识崩溃冰层断裂", "触发破位或跟随下跌：更像共识崩溃，应准备放弃或风控。")
+
+// -----------------------------
+// Dashboard
+// -----------------------------
+var table dashboard = table.new(position.top_right, 2, 10, bgcolor=color.new(color.black, 10), border_width=1)
+if showDashboard and barstate.islast
+    string state = terminalShakeout ? "终极震仓确认" : consensusBreakdown ? "冰层断裂" : radarOnly ? "仅雷达触发" : "无极端信号"
+    color stateColor = terminalShakeout ? color.lime : consensusBreakdown ? color.red : radarOnly ? color.orange : color.gray
+    table.cell(dashboard, 0, 0, "状态", text_color=color.white)
+    table.cell(dashboard, 1, 0, state, text_color=stateColor)
+    table.cell(dashboard, 0, 1, "密集区", text_color=color.white)
+    table.cell(dashboard, 1, 1, str.tostring(denseLow, format.mintick) + " - " + str.tostring(denseHigh, format.mintick), text_color=color.yellow)
+    table.cell(dashboard, 0, 2, "穿越次数", text_color=color.white)
+    table.cell(dashboard, 1, 2, str.tostring(maxCrossCount), text_color=color.yellow)
+    table.cell(dashboard, 0, 3, "-2σ", text_color=color.white)
+    table.cell(dashboard, 1, 3, str.tostring(lowerExtreme, format.mintick), text_color=color.lime)
+    table.cell(dashboard, 0, 4, "相对量", text_color=color.white)
+    table.cell(dashboard, 1, 4, str.tostring(relVol, "#.##"), text_color=relVol >= volSpike ? color.lime : color.gray)
+    table.cell(dashboard, 0, 5, "振幅/ATR", text_color=color.white)
+    table.cell(dashboard, 1, 5, str.tostring(spreadAtr, "#.##"), text_color=spreadAtr >= wideSpread ? color.red : color.gray)
+    table.cell(dashboard, 0, 6, "收盘位置", text_color=color.white)
+    table.cell(dashboard, 1, 6, str.tostring(closePosition, "#.##"), text_color=closePosition >= 0.55 ? color.lime : closePosition <= 0.25 ? color.red : color.gray)
+    table.cell(dashboard, 0, 7, "下影占比", text_color=color.white)
+    table.cell(dashboard, 1, 7, str.tostring(lowerWickRatio, "#.##"), text_color=lowerWickRatio >= wickMin ? color.lime : color.gray)
+    table.cell(dashboard, 0, 8, "上影占比", text_color=color.white)
+    table.cell(dashboard, 1, 8, str.tostring(upperWickRatio, "#.##"), text_color=color.gray)
+    table.cell(dashboard, 0, 9, "实体占比", text_color=color.white)
+    table.cell(dashboard, 1, 9, str.tostring(bodyRatio, "#.##"), text_color=color.gray)
