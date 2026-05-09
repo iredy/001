@@ -13,6 +13,7 @@ from typing import Any, Callable, Mapping
 from rag.prompt_builder import build_prompt
 from rag.retrieve import retrieve_similar_cases
 from strategy.macro_adjust import adjust_macro_weight
+from strategy.relative_strength import enrich_relative_strength
 
 
 DEFAULT_OUTPUT_DIR = Path("outputs/reports")
@@ -102,7 +103,7 @@ def update_review_sample(
 
 
 def _enrich_market_data(market_data: Mapping[str, Any]) -> dict[str, Any]:
-    enriched = dict(market_data)
+    enriched = enrich_relative_strength(market_data)
     baseline_macro = float(enriched.get("macro_weight", 0.25))
     decision = adjust_macro_weight(baseline_macro, enriched)
     enriched["macro_weight"] = round(decision.adjusted_weight, 4)
