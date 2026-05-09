@@ -8,6 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[1]
+
 
 def _safe_read_json(path: Path) -> Any:
     try:
@@ -16,8 +18,8 @@ def _safe_read_json(path: Path) -> Any:
         return None
 
 
-def _iter_source_records() -> Iterable[dict[str, Any]]:
-    report_payload = _safe_read_json(Path("reports/report.json"))
+def _iter_source_records(data_root: Path = DEFAULT_DATA_ROOT) -> Iterable[dict[str, Any]]:
+    report_payload = _safe_read_json(data_root / "reports/report.json")
     if isinstance(report_payload, list):
         for item in report_payload:
             if isinstance(item, dict):
@@ -25,7 +27,7 @@ def _iter_source_records() -> Iterable[dict[str, Any]]:
     elif isinstance(report_payload, dict):
         yield report_payload
 
-    for path in sorted(Path(".").glob("csi300backtest*.json")):
+    for path in sorted(data_root.glob("csi300backtest*.json")):
         payload = _safe_read_json(path)
         if isinstance(payload, list):
             for item in payload:
@@ -34,7 +36,7 @@ def _iter_source_records() -> Iterable[dict[str, Any]]:
         elif isinstance(payload, dict):
             yield payload
 
-    for path in sorted(Path("outputs/reports").glob("*.json")):
+    for path in sorted((data_root / "outputs/reports").glob("*.json")):
         payload = _safe_read_json(path)
         if isinstance(payload, dict):
             yield payload
@@ -105,12 +107,16 @@ def _bm25_scores(query_tokens: list[str], docs: list[list[str]]) -> list[float]:
     return scores
 
 
-def retrieve_similar_cases(market_data: Mapping[str, Any], top_k: int = 2) -> list[dict[str, Any]]:
+def retrieve_similar_cases(
+    market_data: Mapping[str, Any],
+    top_k: int = 2,
+    data_root: Path = DEFAULT_DATA_ROOT,
+) -> list[dict[str, Any]]:
     query = " ".join(f"{k}:{v}" for k, v in market_data.items())
     query_tokens = _tokenize(query)
     target_market = str(market_data.get("market", "unknown")).lower()
 
-    records = list(_iter_source_records())
+    records = list(_iter_source_records(data_root))
     if not records:
         return []
 

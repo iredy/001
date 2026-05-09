@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from datetime import datetime, timedelta, timezone
 
 from data.eastmoney_provider import EastmoneyMacroProvider
 from data.macro_monitor import MacroDataProvider
@@ -24,6 +25,7 @@ def _build_provider() -> MacroDataProvider:
 def main() -> None:
     provider = _build_provider()
     provider.start()
+    cooldown_until: datetime | None = None
 
     def market_data_provider(time_tag: str):
         return provider.get_market_data(time_tag)
@@ -33,12 +35,14 @@ def main() -> None:
     try:
         while True:
             if provider.check_macro_event_flags():
-                flags = EventFlags(macro_rate_shock=True)
-                snapshot = provider.get_market_data("event_driven")
-                fired = run_event_trigger(snapshot, flags)
-                if fired:
-                    logger.info("Macro shock event trigger fired")
-                    time.sleep(3600)
+                now = datetime.now(timezone.utc)
+                if cooldown_until is None or now >= cooldown_until:
+                    flags = EventFlags(macro_rate_shock=True)
+                    snapshot = provider.get_market_data("event_driven")
+                    fired = run_event_trigger(snapshot, flags)
+                    if fired:
+                        logger.info("Macro shock event trigger fired")
+                        cooldown_until = now + timedelta(hours=1)
             time.sleep(60)
     except KeyboardInterrupt:
         provider.stop()

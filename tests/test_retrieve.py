@@ -27,12 +27,12 @@ def test_retrieve_prefers_same_market(tmp_path: Path, monkeypatch):
     }
     (reports / "b.json").write_text(json.dumps(data2, ensure_ascii=False), encoding="utf-8")
 
-    result = retrieve_similar_cases({"market": "kcb200", "theme": "科技"}, top_k=1)
+    result = retrieve_similar_cases({"market": "kcb200", "theme": "科技"}, top_k=1, data_root=tmp_path)
     assert result
     assert result[0]["case_id"] == "a"
 
 
 def test_retrieve_returns_empty_when_no_sources(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    result = retrieve_similar_cases({"market": "kcb200"}, top_k=2)
+    result = retrieve_similar_cases({"market": "kcb200"}, top_k=2, data_root=tmp_path)
     assert result == []
