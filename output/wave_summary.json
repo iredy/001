@@ -1,0 +1,289 @@
+{
+  "meta": {
+    "index_csv": "data/index/000300.csv",
+    "stock_count": 3,
+    "segment_count": 3,
+    "record_count": 9,
+    "architecture_signal_count": 3,
+    "blacklist_count": 1,
+    "reversal_pct": 0.12,
+    "window": "last_10_years"
+  },
+  "segments": [
+    {
+      "start": "2016-02-01",
+      "peak": "2016-05-01",
+      "end": "2016-08-01",
+      "index_rise": 0.2857
+    },
+    {
+      "start": "2016-08-01",
+      "peak": "2016-12-01",
+      "end": "2017-02-01",
+      "index_rise": 0.3667
+    },
+    {
+      "start": "2017-03-01",
+      "peak": "2017-07-01",
+      "end": "2017-09-01",
+      "index_rise": 0.3143
+    }
+  ],
+  "threshold_map": [
+    {
+      "rise_threshold": 0.3,
+      "samples": 9,
+      "dd_mean": 0.2749,
+      "dd_median": 0.2222,
+      "dd_p75": 0.36
+    },
+    {
+      "rise_threshold": 0.5,
+      "samples": 6,
+      "dd_mean": 0.33,
+      "dd_median": 0.305,
+      "dd_p75": 0.3988
+    },
+    {
+      "rise_threshold": 0.8,
+      "samples": 2,
+      "dd_mean": 0.4479,
+      "dd_median": 0.4479,
+      "dd_p75": 0.4918
+    },
+    {
+      "rise_threshold": 1.0,
+      "samples": 2,
+      "dd_mean": 0.4479,
+      "dd_median": 0.4479,
+      "dd_p75": 0.4918
+    },
+    {
+      "rise_threshold": 1.2,
+      "samples": 2,
+      "dd_mean": 0.4479,
+      "dd_median": 0.4479,
+      "dd_p75": 0.4918
+    },
+    {
+      "rise_threshold": 1.5,
+      "samples": 2,
+      "dd_mean": 0.4479,
+      "dd_median": 0.4479,
+      "dd_p75": 0.4918
+    },
+    {
+      "rise_threshold": 2.0,
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null,
+      "dd_p75": null
+    },
+    {
+      "rise_threshold": 2.5,
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null,
+      "dd_p75": null
+    },
+    {
+      "rise_threshold": 3.0,
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null,
+      "dd_p75": null
+    },
+    {
+      "rise_threshold": 5.0,
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null,
+      "dd_p75": null
+    }
+  ],
+  "rise_dd_pairs": [
+    {
+      "rise_pct": 30,
+      "X_median_drawdown_pct": 22.2222,
+      "samples": 9
+    },
+    {
+      "rise_pct": 50,
+      "X_median_drawdown_pct": 30.5,
+      "samples": 6
+    },
+    {
+      "rise_pct": 80,
+      "X_median_drawdown_pct": 44.7857,
+      "samples": 2
+    },
+    {
+      "rise_pct": 100,
+      "X_median_drawdown_pct": 44.7857,
+      "samples": 2
+    },
+    {
+      "rise_pct": 120,
+      "X_median_drawdown_pct": 44.7857,
+      "samples": 2
+    },
+    {
+      "rise_pct": 150,
+      "X_median_drawdown_pct": 44.7857,
+      "samples": 2
+    },
+    {
+      "rise_pct": 200,
+      "X_median_drawdown_pct": null,
+      "samples": 0
+    },
+    {
+      "rise_pct": 250,
+      "X_median_drawdown_pct": null,
+      "samples": 0
+    },
+    {
+      "rise_pct": 300,
+      "X_median_drawdown_pct": null,
+      "samples": 0
+    },
+    {
+      "rise_pct": 500,
+      "X_median_drawdown_pct": null,
+      "samples": 0
+    }
+  ],
+  "bucket_stats": [
+    {
+      "rise_bucket": "[30%, 50% )",
+      "samples": 3,
+      "dd_mean": 0.1647,
+      "dd_median": 0.1786
+    },
+    {
+      "rise_bucket": "[50%, 80% )",
+      "samples": 4,
+      "dd_mean": 0.271,
+      "dd_median": 0.2361
+    },
+    {
+      "rise_bucket": "[80%, 100% )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    },
+    {
+      "rise_bucket": "[100%, 120% )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    },
+    {
+      "rise_bucket": "[120%, 150% )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    },
+    {
+      "rise_bucket": "[150%, 200% )",
+      "samples": 2,
+      "dd_mean": 0.4479,
+      "dd_median": 0.4479
+    },
+    {
+      "rise_bucket": "[200%, 250% )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    },
+    {
+      "rise_bucket": "[250%, 300% )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    },
+    {
+      "rise_bucket": "[300%, 500% )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    },
+    {
+      "rise_bucket": "[500%, ∞ )",
+      "samples": 0,
+      "dd_mean": null,
+      "dd_median": null
+    }
+  ],
+  "architecture_signals": [
+    {
+      "symbol": "000001",
+      "segment_start": "2017-03-01",
+      "as_of": "2017-09-01",
+      "runup_pct": 40.0,
+      "current_dd_pct": -17.8571,
+      "vol_ratio_3d_launch": 0.9845,
+      "vol_ratio_1d_60d": 0.8631,
+      "stage_name": "中继洗盘结构（承重梁加固）",
+      "stability_score": 5,
+      "action": "警惕（洗盘变出货，结构夭折）",
+      "days_in_stage": 3,
+      "risk_drawdown_pct": 36.0,
+      "theil_sen_support": 31.0,
+      "close": 23.0,
+      "blacklist": false,
+      "reverse_panic": false,
+      "reasons": [
+        "收盘跌破Theil-Sen趋势支撑"
+      ]
+    },
+    {
+      "symbol": "300999",
+      "segment_start": "2017-03-01",
+      "as_of": "2017-09-01",
+      "runup_pct": 180.0,
+      "current_dd_pct": -53.5714,
+      "vol_ratio_3d_launch": 2.1615,
+      "vol_ratio_1d_60d": 2.6515,
+      "stage_name": "鱼尾衰退结构（危楼出货）",
+      "stability_score": 0,
+      "action": "绝对拉黑/可进入做空观察池（危楼断裂，切入反向杀恐慌段）",
+      "days_in_stage": 3,
+      "risk_drawdown_pct": 49.18,
+      "theil_sen_support": 37.6667,
+      "close": 13.0,
+      "blacklist": true,
+      "reverse_panic": true,
+      "reasons": [
+        "回撤跌破历史P75风险位",
+        "当日放量超过60日均量1.5倍",
+        "收盘跌破Theil-Sen趋势支撑",
+        "危楼/泡沫段同时满足P75破位、放量、Theil-Sen破位"
+      ]
+    },
+    {
+      "symbol": "600000",
+      "segment_start": "2017-03-01",
+      "as_of": "2017-09-01",
+      "runup_pct": 63.6364,
+      "current_dd_pct": -22.2222,
+      "vol_ratio_3d_launch": 1.1528,
+      "vol_ratio_1d_60d": 0.9527,
+      "stage_name": "主升启动结构（趋势正式立柱）",
+      "stability_score": 6,
+      "action": "持股观望",
+      "days_in_stage": 3,
+      "risk_drawdown_pct": 39.88,
+      "theil_sen_support": 17.0,
+      "close": 14.0,
+      "blacklist": false,
+      "reverse_panic": false,
+      "reasons": [
+        "收盘跌破Theil-Sen趋势支撑"
+      ]
+    }
+  ],
+  "blacklist_symbols": [
+    "300999"
+  ]
+}
