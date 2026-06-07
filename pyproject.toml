@@ -1,0 +1,9 @@
+[project]
+name = "market-rotation-monitor"
+version = "0.1.0"
+description = "Medium-cycle high/low watch pools and sector rotation signals"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
