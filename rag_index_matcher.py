@@ -14,11 +14,12 @@ bars for symbols such as ``000001.SH`` (SSE Composite) or ``000688.SH``
 from __future__ import annotations
 
 from bisect import bisect_left
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 import csv
 import re
+from math import exp
 from statistics import mean
 from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 
@@ -39,6 +40,7 @@ class StrategyRecord:
     signal: Signal
     text: str
     confidence: float = 1.0
+    relevance_score: float = 1.0
     source_id: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -85,6 +87,7 @@ class BacktestSummary:
     accuracy: float | None
     average_return: float | None
     cumulative_return: float | None
+    weighted_accuracy: float | None
     by_signal: Mapping[Signal, Mapping[str, float | int | None]]
 
 
@@ -205,11 +208,22 @@ class TimeSeriesRAGIndexMatcher:
         horizon_days: int = 5,
         lookback_days: int = 3,
         explicit_index_symbol: str | None = None,
+        min_relevance_score: float = 0.15,
+        top_k: int | None = None,
     ) -> tuple[list[StrategyIndexMatch], BacktestSummary]:
-        """Run the full RAG-to-index validation pipeline for one query."""
+        """Run the full RAG-to-index validation pipeline for one query.
+
+        ``min_relevance_score`` and ``top_k`` remove low-quality RAG hits before
+        backtesting. This avoids measuring unrelated retrieved documents as
+        strategy calls, which is the most common source of inflated/unstable
+        accuracy.
+        """
 
         raw_items = list(rag_retriever(query))
-        strategies = self.extract_strategies(raw_items)
+        strategies = self.extract_strategies(raw_items, query=query)
+        strategies = rank_and_filter_strategies(
+            strategies, query, min_relevance_score=min_relevance_score, top_k=top_k
+        )
         matches = self.match_strategies(
             strategies,
             horizon_days=horizon_days,
@@ -218,7 +232,12 @@ class TimeSeriesRAGIndexMatcher:
         )
         return matches, self.summarize(matches)
 
-    def extract_strategies(self, items: Iterable[str | Mapping[str, Any] | StrategyRecord]) -> list[StrategyRecord]:
+    def extract_strategies(
+        self,
+        items: Iterable[str | Mapping[str, Any] | StrategyRecord],
+        *,
+        query: str | None = None,
+    ) -> list[StrategyRecord]:
         """Convert RAG results into dated strategy records.
 
         Supported RAG result shapes:
@@ -241,13 +260,15 @@ class TimeSeriesRAGIndexMatcher:
                 source_id = None
                 metadata: Mapping[str, Any] = {}
                 confidence = 1.0
+                raw_relevance: Any = None
             else:
                 text = str(item.get("content") or item.get("text") or item.get("document") or "")
                 raw_date = item.get("date") or item.get("strategy_date") or item.get("trade_date")
                 raw_signal = item.get("signal")
                 source_id = str(item.get("id") or item.get("source_id") or "") or None
                 metadata = item.get("metadata") or {}
-                confidence = float(item.get("confidence", 1.0))
+                confidence = clamp(float(item.get("confidence", item.get("score", 1.0))), 0.0, 1.0)
+                raw_relevance = item.get("relevance_score") or item.get("similarity") or item.get("score")
 
             parsed_date = coerce_date(raw_date) if raw_date is not None else extract_first_date(text)
             if parsed_date is None:
@@ -259,6 +280,7 @@ class TimeSeriesRAGIndexMatcher:
                     signal=signal,
                     text=text,
                     confidence=confidence,
+                    relevance_score=clamp(float(raw_relevance), 0.0, 1.0) if raw_relevance is not None else 1.0,
                     source_id=source_id,
                     metadata=metadata,
                 )
@@ -331,6 +353,7 @@ class TimeSeriesRAGIndexMatcher:
 
         returns = [m.forward_return for m in matches]
         average_return = mean(returns) if returns else None
+        weighted_accuracy = calculate_weighted_accuracy(evaluated_matches)
         cumulative_return = None
         if returns:
             cumulative = 1.0
@@ -351,6 +374,7 @@ class TimeSeriesRAGIndexMatcher:
                     else None
                 ),
                 "average_return": mean([m.forward_return for m in signal_matches]) if signal_matches else None,
+                "weighted_accuracy": calculate_weighted_accuracy(signal_evaluated),
             }
 
         return BacktestSummary(
@@ -359,6 +383,7 @@ class TimeSeriesRAGIndexMatcher:
             accuracy=accuracy,
             average_return=average_return,
             cumulative_return=cumulative_return,
+            weighted_accuracy=weighted_accuracy,
             by_signal=by_signal,
         )
 
@@ -379,6 +404,8 @@ class TimeSeriesRAGIndexMatcher:
                     "aligned_index_date": match.aligned_date.isoformat(),
                     "index_symbol": match.index_symbol,
                     "strategy_signal": match.strategy.signal,
+                    "strategy_confidence": round(match.strategy.confidence, 4),
+                    "rag_relevance_score": round(match.strategy.relevance_score, 4),
                     "strategy_text": match.strategy.text,
                     "market_path": [
                         {"date": bar.trade_date.isoformat(), "close": bar.close}
@@ -443,16 +470,26 @@ def coerce_date(value: Any) -> date | None:
 
 
 def infer_signal(text: str) -> Signal:
-    """Infer strategy direction from Chinese market judgement keywords."""
+    """Infer strategy direction from Chinese market judgement keywords.
+
+    The scorer handles common false-positive phrases such as ``反弹乏力`` or
+    ``不是企稳`` so retrieval snippets with risk warnings are less likely to be
+    misclassified as bullish calls.
+    """
 
     bullish = keyword_score(text, TimeSeriesRAGIndexMatcher.DEFAULT_BULLISH_KEYWORDS)
     bearish = keyword_score(text, TimeSeriesRAGIndexMatcher.DEFAULT_BEARISH_KEYWORDS)
     neutral = keyword_score(text, TimeSeriesRAGIndexMatcher.DEFAULT_NEUTRAL_KEYWORDS)
-    if bullish > bearish and bullish >= neutral:
+
+    bullish -= keyword_score(text, ("不是企稳", "尚未企稳", "未企稳", "反弹乏力", "反弹受阻", "谨慎反弹")) * 2
+    bearish += keyword_score(text, ("不是企稳", "尚未企稳", "未企稳", "反弹乏力", "反弹受阻", "谨慎反弹")) * 2
+    bearish += keyword_score(text, ("跌破", "冲高回落", "高位回落", "放量下跌"))
+
+    if bullish > bearish and bullish >= neutral and bullish > 0:
         return BULLISH
-    if bearish > bullish and bearish >= neutral:
+    if bearish > bullish and bearish >= neutral and bearish > 0:
         return BEARISH
-    if neutral > 0:
+    if neutral > 0 or bullish == bearish:
         return NEUTRAL
     return UNKNOWN
 
@@ -551,3 +588,83 @@ def judge_direction(signal: Signal, forward_return: float, *, neutral_band: floa
     if signal == NEUTRAL:
         return abs(forward_return) <= neutral_band
     return None
+
+
+def clamp(value: float, lower: float, upper: float) -> float:
+    """Clamp a floating point value into an inclusive range."""
+
+    return max(lower, min(upper, value))
+
+
+def tokenize_query(text: str) -> set[str]:
+    """Tokenize Chinese/English RAG text into coarse relevance features."""
+
+    tokens = set(re.findall(r"[A-Za-z0-9_.]+|[一-鿿]{2,}", text))
+    tokens.update(keyword for keyword in TimeSeriesRAGIndexMatcher.DEFAULT_BULLISH_KEYWORDS if keyword in text)
+    tokens.update(keyword for keyword in TimeSeriesRAGIndexMatcher.DEFAULT_BEARISH_KEYWORDS if keyword in text)
+    tokens.update(keyword for keyword in TimeSeriesRAGIndexMatcher.DEFAULT_NEUTRAL_KEYWORDS if keyword in text)
+    return tokens
+
+
+def score_strategy_relevance(strategy: StrategyRecord, query: str | None) -> StrategyRecord:
+    """Attach a deterministic RAG relevance score to a strategy record."""
+
+    if not query:
+        return strategy
+
+    query_tokens = tokenize_query(query)
+    text_tokens = tokenize_query(strategy.text)
+    overlap = len(query_tokens & text_tokens) / len(query_tokens) if query_tokens else 1.0
+
+    query_date = extract_first_date(query)
+    date_score = 0.0
+    if query_date is not None:
+        date_distance = abs((strategy.strategy_date - query_date).days)
+        date_score = exp(-date_distance / 14)
+
+    signal_score = 1.0 if infer_signal(query) in {UNKNOWN, strategy.signal} else 0.35
+    metadata_score = strategy.relevance_score
+    relevance = clamp(0.45 * overlap + 0.30 * date_score + 0.15 * signal_score + 0.10 * metadata_score, 0.0, 1.0)
+    return replace(strategy, relevance_score=relevance, confidence=clamp(strategy.confidence * relevance, 0.0, 1.0))
+
+
+def rank_and_filter_strategies(
+    strategies: Sequence[StrategyRecord],
+    query: str | None,
+    *,
+    min_relevance_score: float = 0.15,
+    top_k: int | None = None,
+) -> list[StrategyRecord]:
+    """Deduplicate and filter RAG hits before index matching.
+
+    Keeps the highest confidence/relevance version for the same
+    ``(date, signal, text)`` key and removes records that are weakly related to
+    the query.
+    """
+
+    scored = [score_strategy_relevance(strategy, query) for strategy in strategies]
+    filtered = [strategy for strategy in scored if strategy.relevance_score >= min_relevance_score]
+    deduped: dict[tuple[date, Signal, str], StrategyRecord] = {}
+    for strategy in filtered:
+        key = (strategy.strategy_date, strategy.signal, normalize_strategy_text(strategy.text))
+        current = deduped.get(key)
+        if current is None or (strategy.relevance_score, strategy.confidence) > (current.relevance_score, current.confidence):
+            deduped[key] = strategy
+    ranked = sorted(deduped.values(), key=lambda item: (item.relevance_score, item.confidence), reverse=True)
+    return ranked[:top_k] if top_k is not None else ranked
+
+
+def normalize_strategy_text(text: str) -> str:
+    """Normalize strategy text for coarse de-duplication."""
+
+    return re.sub(r"\s+", "", text)[:120]
+
+
+def calculate_weighted_accuracy(matches: Sequence[StrategyIndexMatch]) -> float | None:
+    """Calculate confidence/relevance weighted directional accuracy."""
+
+    weighted = [(match.strategy.confidence * match.strategy.relevance_score, match) for match in matches]
+    total_weight = sum(weight for weight, _match in weighted)
+    if total_weight <= 0:
+        return None
+    return sum(weight for weight, match in weighted if match.direction_correct) / total_weight

@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 from rag_index_matcher import (
+    BEARISH,
     BULLISH,
     CsvIndexDataProvider,
     IndexBar,
@@ -12,6 +13,7 @@ from rag_index_matcher import (
     align_to_trading_day,
     extract_first_date,
     infer_signal,
+    rank_and_filter_strategies,
 )
 
 
@@ -36,6 +38,9 @@ class RagIndexMatcherTests(unittest.TestCase):
         self.assertEqual(extract_first_date("2024-11-19 企稳反弹"), date(2024, 11, 19))
         self.assertEqual(infer_signal("2024-11-19 科创50 企稳反弹，建议加仓"), BULLISH)
 
+    def test_signal_inference_penalizes_false_bullish_phrases(self):
+        self.assertEqual(infer_signal("2024-11-19 反弹乏力，尚未企稳，建议减仓"), BEARISH)
+
     def test_aligns_weekend_or_missing_day_to_previous_bar_within_lookback(self):
         dates = [date(2024, 11, 18), date(2024, 11, 19), date(2024, 11, 22)]
         self.assertEqual(align_to_trading_day(dates, date(2024, 11, 20), lookback_days=2), 1)
@@ -58,10 +63,40 @@ class RagIndexMatcherTests(unittest.TestCase):
         self.assertTrue(matches[0].direction_correct)
         self.assertGreater(matches[0].forward_return, 0)
         self.assertEqual(summary.accuracy, 1.0)
+        self.assertEqual(summary.weighted_accuracy, 1.0)
 
         samples = matcher.build_llm_learning_samples(matches)
         self.assertEqual(samples[0]["label"], "correct")
         self.assertEqual(samples[0]["strategy_signal"], "bullish")
+
+    def test_rag_relevance_filter_removes_unrelated_hits(self):
+        provider = FakeIndexProvider()
+        matcher = TimeSeriesRAGIndexMatcher(provider)
+
+        def rag_retriever(_query):
+            return [
+                "2024-11-19 科创50 企稳反弹，建议加仓",
+                "2023-01-01 白酒板块看空风险，建议减仓",
+            ]
+
+        matches, summary = matcher.retrieve_match_and_evaluate(
+            "2024-11-19 科创50 企稳反弹",
+            rag_retriever,
+            horizon_days=3,
+            min_relevance_score=0.40,
+        )
+        self.assertEqual(len(matches), 1)
+        self.assertIn("科创50", matches[0].strategy.text)
+        self.assertEqual(summary.evaluated, 1)
+
+    def test_rank_and_filter_deduplicates_and_keeps_best_hit(self):
+        strategies = [
+            StrategyRecord(date(2024, 11, 19), BULLISH, "2024-11-19 科创50 企稳反弹", confidence=0.3),
+            StrategyRecord(date(2024, 11, 19), BULLISH, "2024-11-19 科创50 企稳反弹", confidence=0.9),
+        ]
+        ranked = rank_and_filter_strategies(strategies, "2024-11-19 科创50 企稳反弹")
+        self.assertEqual(len(ranked), 1)
+        self.assertGreater(ranked[0].confidence, 0.3)
 
     def test_csv_provider_filters_rows_for_symbol_and_date_range(self):
         with TemporaryDirectory() as tmpdir:
