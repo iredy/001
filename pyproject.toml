@@ -1,0 +1,13 @@
+[project]
+name = "ai-memory-chain-lab"
+version = "0.1.0"
+description = "Scenario research toolkit for AI infrastructure driven memory chip inflation and consumer electronics supply chains."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+chain-lab = "chain_lab.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
