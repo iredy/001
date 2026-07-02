@@ -1,0 +1,8 @@
+{
+  "broke_support": true,
+  "break_volume_ratio": 0.45,
+  "test_spread_narrowed": true,
+  "test_volume_ratio": 0.38,
+  "demand_candle_volume_ratio": 1.52,
+  "demand_candle_close_strength": 0.82
+}

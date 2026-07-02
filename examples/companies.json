@@ -1,0 +1,43 @@
+{
+  "companies": [
+    {
+      "ticker": "LOCAL-MEM",
+      "name": "Domestic Memory Champion",
+      "segment": "midstream_chip_foundry_memory",
+      "moat": 0.78,
+      "growth": 0.88,
+      "margin_power": 0.64,
+      "capex_intensity": 0.91,
+      "local_supply_access": 0.95,
+      "ai_edge_exposure": 0.82,
+      "balance_sheet_strength": 0.70,
+      "notes": ["Benefits from domestic capacity priority and long-cycle substitution demand."]
+    },
+    {
+      "ticker": "TERM-AI",
+      "name": "AI Terminal Brand",
+      "segment": "downstream_consumer_terminal",
+      "moat": 0.73,
+      "growth": 0.74,
+      "margin_power": 0.69,
+      "capex_intensity": 0.34,
+      "local_supply_access": 0.82,
+      "ai_edge_exposure": 0.86,
+      "balance_sheet_strength": 0.76,
+      "notes": ["Can use Apple price hikes to attack the 5000-8000 yuan band."]
+    },
+    {
+      "ticker": "EQUIP-01",
+      "name": "Semiconductor Equipment Leader",
+      "segment": "upstream_materials_equipment",
+      "moat": 0.84,
+      "growth": 0.79,
+      "margin_power": 0.71,
+      "capex_intensity": 0.63,
+      "local_supply_access": 0.88,
+      "ai_edge_exposure": 0.62,
+      "balance_sheet_strength": 0.81,
+      "notes": ["Upstream bottleneck asset with pricing tied to fab expansion waves."]
+    }
+  ]
+}
