@@ -9,6 +9,7 @@ from strategy.model_router import (
     ProviderExecutor,
     ProviderUnavailable,
     TaskMeta,
+    observe_shadow_route,
     route,
 )
 
@@ -81,3 +82,15 @@ def test_executor_returns_normalized_response_on_success():
         assert response.provider == "ctyun_primary"
 
     asyncio.run(run_test())
+
+
+def test_observe_shadow_route_keeps_primary_as_actual_provider():
+    observation = observe_shadow_route(
+        TaskMeta("simple_tasks", estimated_input_tokens=100),
+        {"qwen_7b": True, "ctyun_primary": True},
+        token_budget={"qwen_7b": 4_000, "ctyun_primary": 64_000},
+    )
+
+    assert observation.actual_provider == "ctyun_primary"
+    assert observation.shadow_provider == "qwen_7b"
+    assert observation.would_switch is True

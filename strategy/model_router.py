@@ -152,6 +152,16 @@ def route(
     return RouteDecision(primary_provider, "fallback_no_candidate")
 
 
+@dataclass(frozen=True)
+class ShadowRouteObservation:
+    """Record what the router would choose while production still uses primary."""
+
+    actual_provider: str
+    shadow_provider: str
+    reason: str
+    would_switch: bool
+
+
 class ProviderExecutor:
     """Execute calls through a provider-local semaphore and circuit breaker."""
 
@@ -179,3 +189,29 @@ class ProviderExecutor:
 
         self.breaker.record_success()
         return response
+
+
+def observe_shadow_route(
+    task: TaskMeta,
+    health: HealthState,
+    *,
+    route_table: Mapping[str, Sequence[str]] = DEFAULT_ROUTE_TABLE,
+    token_budget: TokenBudget | None = None,
+    primary_provider: str = PRIMARY_PROVIDER,
+) -> ShadowRouteObservation:
+    """Evaluate routing in shadow mode without changing the live provider."""
+
+    decision = route(
+        task,
+        health,
+        route_table=route_table,
+        token_budget=token_budget,
+        router_enabled=True,
+        primary_provider=primary_provider,
+    )
+    return ShadowRouteObservation(
+        actual_provider=primary_provider,
+        shadow_provider=decision.provider,
+        reason=decision.reason,
+        would_switch=decision.provider != primary_provider,
+    )
